@@ -1,6 +1,0 @@
-name: cellsnplite
-channels:
- - conda-forge
- - bioconda
-dependencies:
- - cellsnp-lite
