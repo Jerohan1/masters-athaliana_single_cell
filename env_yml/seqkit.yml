@@ -1,0 +1,9 @@
+name: seqkit
+channels:
+  - bioconda
+  - conda-forge
+  - genomedk
+  - gwforg
+dependencies:
+  - seqkit=2.12.0=he881be0_1
+prefix: /home/jool/miniforge3/envs/seqkit

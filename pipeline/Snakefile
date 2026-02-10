@@ -1,0 +1,31 @@
+configfile: 'config.yaml'
+
+include: '../rules/variants.snakefile'
+include: '../rules/genotype.snakefile'
+include: '../rules/diploid.snakefile'
+include: '../rules/crossovers.snakefile'
+include: '../rules/notebooks.snakefile'
+
+
+def expand_dataset_comps(file_patterns):
+    fns = []
+    for cond, ds in config['datasets'].items():
+        comps = expand('{parent1}__vs__{parent2}',
+                       parent1=ds['reference_genotype'],
+                       parent2=ds['parent2_accessions'])
+        fns += expand(file_patterns, sample_name=cond, comp=comps)
+    return fns
+
+rule all:
+    input:
+        expand(
+           [
+               'eqtls/{sample_name}.all.eqtls.tsv',
+               'figures/{nb_type}_figures_{sample_name}'
+           ],
+           sample_name=config['datasets'],
+           nb_type=['expression', 'genotyping', 'crossover', 'eqtl', 'hotspot']
+        ),
+        expand_dataset_comps(
+            ['eqtls/{sample_name}.{comp}.eqtls.tsv'],
+        )
