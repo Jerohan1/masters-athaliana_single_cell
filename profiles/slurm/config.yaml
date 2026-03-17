@@ -1,0 +1,6 @@
+executor: slurm
+
+default-resources:
+  - slurm_account=athaliana_single_cell
+  - mem_mb=1024
+  - runtime=4*60
