@@ -1,8 +1,8 @@
 def get_wga_input(wc):
     parent1, parent2 = wc.comp.split('__vs__')
     return {
-        'parent1': ancient(config['genome_fasta_fns'][parent1]),
-        'parent2': ancient(config['genome_fasta_fns'][parent2]),
+        'parent1': ancient(config['genome_fasta'][parent1]),
+        'parent2': ancient(config['genome_fasta'][parent2]),
     }
 
 
@@ -10,17 +10,16 @@ rule minimap2_wga:
     input:
         unpack(get_wga_input)
     output:
-        'annotation/diploid/wga/{comp}.bam'
+        '../../annotations/diploid/wga/{comp}.bam'
     threads:
-        12
+        8
     resources:
-        mem_mb=lambda wc, threads: 1024 * threads,
-        queue='ioheavy'
+        mem_mb=lambda wc, threads: 2048 * threads
     conda:
-        'env_yamls/minimap2.yaml'
+        'env_yml/minimap.yml'
     shell:
         '''
-         minimap2 --eqx -t 8 -ax asm20 -z1000,100 --no-end-flt \
+        minimap2 --eqx -t {threads} -ax asm20 -z1000,100 --no-end-flt \
            {input.parent1} {input.parent2}  | \
         samtools view -bS | \
         samtools sort -o - - > {output}
@@ -30,7 +29,7 @@ rule minimap2_wga:
 
 def get_syri_input(wc):
     input_ = get_wga_input(wc)
-    input_['bam'] = 'annotation/diploid/wga/{comp}.bam'
+    input_['bam'] = '../../annotations/diploid/wga/{comp}.bam'
     return input_
 
 
@@ -38,42 +37,57 @@ rule run_syri:
     input:
         unpack(get_syri_input)
     output:
-        vcf='annotation/diploid/vcf/{comp}.syri.vcf',
-        syri='annotation/diploid/vcf/{comp}.syri.out',
+        vcf='../../annotations/diploid/vcf/{comp}.syri.vcf',
+        syri='../../annotations/diploid/vcf/{comp}.syri.out',
+    threads:
+        1
     resources:
-        mem_mb=lambda wc, threads: 2048 * threads,
-        queue='ioheavy'
+        mem_mb=8192
     conda:
-        'env_yamls/msyd.yaml'
+        'env_yml/msyd.yml'
     params:
         acc=lambda wc: wc.comp.split('__vs__')[1]
     shell:
         '''
-        syri -F B -f --hdrseq --dir annotation/diploid/vcf --prefix {wildcards.comp}. \
+        syri -F B -f --hdrseq --dir ../../annotations/diploid/vcf --prefix {wildcards.comp}. \
           -c {input.bam} -q {input.parent2} -r {input.parent1} --samplename {params.acc}
         '''
 
+rule plotsr_syri:
+    input:
+        syri='../../annotations/diploid/vcf/{comp}.syri.out',
+        genomes='../../annotations/genomes.txt',
+    output:
+        '../../results/{comp}_syri_plot.png'
+    threads:
+        1
+    resources:
+        mem_mb=8192
+    conda:
+        'env_yml/msyd.yml'
+    params:
+        acc=lambda wc: wc.comp.split('__vs__')[1]
+    shell:
+        '''
+        plotsr --sr {input.syri} --genomes {input.genomes} -o {output}
+        '''
 
 def get_msyd_input(wc):
     accs = config['datasets'][wc.cond]['parent2_accessions']
     ref_name = config['datasets'][wc.cond]['reference_genotype']
     return {
-        'bams': expand('annotation/diploid/wga/{ref_name}__vs__{accession}.bam',
-                       ref_name=ref_name, accession=accs),
-        'syri': expand('annotation/diploid/vcf/{ref_name}__vs__{accession}.syri.out',
-                       ref_name=ref_name, accession=accs),
-        'vcf': expand('annotation/diploid/vcf/{ref_name}__vs__{accession}.syri.vcf',
-                       ref_name=ref_name, accession=accs),
-        'fasta': [config['genome_fasta_fns'][acc] for acc in accs],
+        'bams': expand('../../annotations/diploid/wga/{ref_name}__vs__{accession}.bam', ref_name=ref_name, accession=accs),
+        'syri': expand('../../annotations/diploid/vcf/{ref_name}__vs__{accession}.syri.out', ref_name=ref_name, accession=accs),
+        'vcf': expand('../../annotations/diploid/vcf/{ref_name}__vs__{accession}.syri.vcf', ref_name=ref_name, accession=accs),
+        'fasta': [config['genome_fasta'][acc] for acc in accs],
     }
-    
+
 
 rule msyd_input:
-    input:    
+    input:
         unpack(get_msyd_input)
     output:
-        cfg=temp('annotation/diploid/vcf/{cond}.msyd_config.tsv')
-    group: 'msyd'
+        cfg=temp('../../annotations/diploid/vcf/{cond}.msyd_config.tsv')
     run:
         ref_name = config['datasets'][wildcards.cond]['reference_genotype']
         with open(output.cfg, 'w') as f:
@@ -81,23 +95,22 @@ rule msyd_input:
             for accession in config['datasets'][wildcards.cond]['parent2_accessions']:
                 f.write(
                     f'{accession}\t'
-                    f'annotation/diploid/wga/{ref_name}__vs__{accession}.bam\t'
-                    f'annotation/diploid/vcf/{ref_name}__vs__{accession}.syri.out\t'
-                    f'annotation/diploid/vcf/{ref_name}__vs__{accession}.syri.vcf\t'
-                    f'{config["genome_fasta_fns"][accession]}\n'
+                    f'../../annotations/diploid/wga/{ref_name}__vs__{accession}.bam\t'
+                    f'../../annotations/diploid/vcf/{ref_name}__vs__{accession}.syri.out\t'
+                    f'../../annotations/diploid/vcf/{ref_name}__vs__{accession}.syri.vcf\t'
+                    f'{config["genome_fasta"][accession]}\n'
                 )
 
 
 rule run_msyd:
     input:
-        cfg='annotation/diploid/vcf/{cond}.msyd_config.tsv',
-        ref=lambda wc: ancient(config['genome_fasta_fns'][config['datasets'][wc.cond]['reference_genotype']])
+        cfg='../../annotations/diploid/vcf/{cond}.msyd_config.tsv',
+        ref=lambda wc: ancient(config['genome_fasta'][config['datasets'][wc.cond]['reference_genotype']])
     output:
-        pff='annotation/diploid/vcf/{cond,\w+}.pansyn.pff',
-        vcf='annotation/diploid/vcf/{cond,\w+}.vcf',
-    group: 'msyd'
+        pff=r'../../annotations/diploid/vcf/{cond,\w+}.pansyn.pff',
+        vcf=r'../../annotations/diploid/vcf/{cond,\w+}.vcf',
     conda:
-        'env_yamls/msyd.yaml'
+        'env_yml/msyd.yml'
     shell:
         '''
         msyd call --core -i {input.cfg} -r {input.ref} -o {output.pff} -m {output.vcf}
@@ -106,13 +119,13 @@ rule run_msyd:
 
 rule convert_vcf_for_star:
     input:
-        'annotation/diploid/vcf/{comp}.syri.vcf'
+        '../../annotations/diploid/vcf/{comp}.syri.vcf'
     output:
-        'annotation/diploid/vcf/{comp}.snvs.vcf'
+        '../../annotations/diploid/vcf/{comp}.snvs.vcf'
     conda:
-        'env_yamls/pysam.yaml'
+        'env_yml/pysam.yml'
     resources:
-        mem_mb=30_000
+        mem_mb=8_000
     shell:
         '''
         python ../scripts/convert_syri_output.py {input} {output}
@@ -121,11 +134,11 @@ rule convert_vcf_for_star:
 
 rule filter_snps_for_star_consensus:
     input:
-        vcf='annotation/diploid/vcf/{cond}.vcf'
+        vcf=r'../../annotations/diploid/vcf/{cond}.vcf'
     output:
-        vcf='annotation/diploid/vcf/{cond,\w+}.consensus.vcf',
+        vcf=r'../../annotations/diploid/vcf/{cond,\w+}.consensus.vcf',
     conda:
-        'env_yamls/pysam.yaml'
+        'env_yml/pysam.yml'
     params:
         min_ac=lambda wc: len(config['datasets'][wc.cond]['parent2_accessions']) // 2 + 1,
         max_indel_size=50,
@@ -147,11 +160,11 @@ rule filter_snps_for_star_consensus:
 
 rule filter_snps_for_cellsnplite:
     input:
-        vcf='annotation/diploid/vcf/{cond}.vcf'
+        vcf='../../annotations/diploid/vcf/{cond}.vcf'
     output:
-        vcf='annotation/diploid/vcf/{cond,\w+}.cellsnplite.vcf.gz',
+        vcf=r'../../annotations/diploid/vcf/{cond,\w+}.cellsnplite.vcf.gz'
     conda:
-        'env_yamls/pysam.yaml'
+        'env_yml/pysam.yml'
     shell:
         r'''
         bcftools annotate \

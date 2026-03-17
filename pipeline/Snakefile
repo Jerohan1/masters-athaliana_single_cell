@@ -1,10 +1,11 @@
 configfile: 'config.yaml'
 
+# include: '../rules/gen_small_bams_col.snakefile'
 include: '../rules/variants.snakefile'
 include: '../rules/genotype.snakefile'
 include: '../rules/diploid.snakefile'
-include: '../rules/crossovers.snakefile'
-include: '../rules/notebooks.snakefile'
+#include: '../rules/crossovers.snakefile'
+#include: '../rules/notebooks.snakefile'
 
 
 def expand_dataset_comps(file_patterns):
@@ -18,14 +19,15 @@ def expand_dataset_comps(file_patterns):
 
 rule all:
     input:
-        expand(
-           [
-               'eqtls/{sample_name}.all.eqtls.tsv',
-               'figures/{nb_type}_figures_{sample_name}'
-           ],
-           sample_name=config['datasets'],
-           nb_type=['expression', 'genotyping', 'crossover', 'eqtl', 'hotspot']
-        ),
-        expand_dataset_comps(
-            ['eqtls/{sample_name}.{comp}.eqtls.tsv'],
-        )
+        expand([r'../../RTIGER/{cond}/myres_object.rds'], cond=['col0xdb1'])
+        # expand(
+        #    [
+        #        'eqtls/{sample_name}.all.eqtls.tsv',
+        #        'figures/{nb_type}_figures_{sample_name}'
+        #    ],
+        #    sample_name=config['datasets'],
+        #    nb_type=['expression', 'genotyping', 'crossover', 'eqtl', 'hotspot']
+        # ),
+        # expand_dataset_comps(
+        #     ['eqtls/{sample_name}.{comp}.eqtls.tsv'],
+        # )
